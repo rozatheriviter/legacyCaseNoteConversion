@@ -1,0 +1,8 @@
+Legacy System Turnover Process
+
+1) Download entire current participants folder
+2) Run legacyToNewFormatConversion Toolchain (see Readme)
+3) Upload output folders containing new casenotes format to google drive.
+4) Update roster with new casenote links (use column AE to test, then update AppScript for default column once confirmed working)
+5) Move backend and seperate documents (HMIS Notes 'former Week Of notes' etc, and send links to MGMT) 
+6) Enjoy
