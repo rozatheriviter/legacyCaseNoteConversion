@@ -37,6 +37,8 @@ The following Python libraries are required:
 To install these dependencies, run:
 ```bash
 pip install python-docx pandas xlsxwriter openpyxl
+```
+
 
 ------------------------------------------------------------
 2. WORKFLOW AND USAGE
