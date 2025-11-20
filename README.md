@@ -38,12 +38,6 @@ To install these dependencies, run:
 ```bash
 pip install python-docx pandas xlsxwriter openpyxl
 ```
-
-
-------------------------------------------------------------
-2. WORKFLOW AND USAGE
-------------------------------------------------------------
-
 The 'golive.sh' script automates the entire three-step process:
 
 1.  **Filter:** Scans a master ZIP, keeps only verified client case files (those containing "Entry Date" or "Exit Date" keywords).
@@ -57,23 +51,22 @@ Place your legacy client files (e.g., `archive.zip`) in the same directory as th
 ### STEP 2: Execute the Script
 
 Run the following commands to make the shell script executable and start the process:
-
+```bash
 sudo chmod +x golive.sh
 ./golive.sh
+```
 
 The script will prompt you for two inputs:
 
 1.  **Input ZIP File Name:** The name of your master archive (e.g., `archive.zip`).
 2.  **Output Prefix:** A simple word to prefix the final output folder and temporary files (e.g., `batch_A`).
 
-------------------------------------------------------------
-3. OUTPUT AND CLEANUP
-------------------------------------------------------------
+### STEP 3: OUTPUT AND CLEANUP
+
 
 The process is self-cleaning, deleting temporary files upon completion.
 
-### Final Output Location:
-
+Final Output Location:
 A new directory will be created, named something like **`[Your Prefix]_xlsx_output`** (e.g., `batch_A_xlsx_output`).
 
 ### Output Contents:
