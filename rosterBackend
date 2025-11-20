@@ -1,0 +1,53 @@
+function updateClientDropdown() {
+  // 1. Define the Roster Sheet
+  var rosterSS = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = rosterSS.getSheetByName('Sheet1'); 
+  
+  // *** ADD IDs FOR ALL FORMS THAT NEED THE DROPDOWN ***
+  var CASE_NOTES_FORM_ID = '1zst3Eef2jVWzJweJtJEUer6UcnjEHsLkcLCZxtMRA8g'; // Existing Case Notes ID
+  var ROOM_CHECK_FORM_ID = '1D9bnQYnHkL8-cjfT_D8aVk4dR4b8HpFd0E-AOm3zqJw'; // Existing Room Check ID
+  // THIS IS THE CORRECTED ID FOR THE MEAL TRACKER:
+  var MEAL_TRACKER_FORM_ID = '1i7bA8Sbrwke3whha92evopIYdiN6KaR96vELmpCRxZ4'; 
+
+  // 2. Get the Client Data (Column C = 3)
+  // ... (Data extraction logic remains the same)
+  var lastRow = sheet.getLastRow();
+  var dataRange = sheet.getRange(2, 3, lastRow - 1, 1); 
+  var clientNames = dataRange.getValues();
+
+  var clientList = [];
+  var uniqueValues = new Set(); 
+
+  for (var i = 0; i < clientNames.length; i++) {
+    var value = clientNames[i][0];
+    if (value && !uniqueValues.has(value)) {
+      uniqueValues.add(value);
+      clientList.push(value);
+    }
+  }
+
+  // 3. Update the Dropdown in ALL Forms
+  function updateFormDropdown(formId) {
+    // Skip if ID is missing
+    if (!formId) return; 
+      
+    var form = FormApp.openById(formId);
+    var items = form.getItems();
+    
+    // Look for the question titled 'Select Client'
+    for (var i = 0; i < items.length; i++) {
+      // Ensure the question title is an EXACT match
+      if (items[i].getTitle() === 'Select Client') { 
+        var item = items[i];
+        item.asListItem().setChoiceValues(clientList);
+        Logger.log('Updated dropdown for Form ID: ' + formId);
+        return;
+      }
+    }
+    Logger.log('Could not find "Select Client" question in Form ID: ' + formId);
+  }
+
+  updateFormDropdown(CASE_NOTES_FORM_ID);
+  updateFormDropdown(ROOM_CHECK_FORM_ID);
+  updateFormDropdown(MEAL_TRACKER_FORM_ID); // Now using the correct ID!
+}

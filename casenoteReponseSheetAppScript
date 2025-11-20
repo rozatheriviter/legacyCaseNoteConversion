@@ -1,0 +1,128 @@
+// --- HELPER FUNCTION: Pushes standardized note data to the Master Log Sheet ---
+const BOSS_LOG_ID = '1CS8GzyADMfO0dxgWvcPBO6pLPwS-noIHMGI2LshohUc';
+
+function pushToBossLog(dataToAppend, type) {
+  try {
+    const bossSS = SpreadsheetApp.openById(BOSS_LOG_ID);
+    // Assume the data goes to the first sheet/tab
+    const bossSheet = bossSS.getSheets()[0]; 
+    
+    // Append the Type (e.g., "Case Note" or "Room Check") as the first column
+    dataToAppend.unshift(type); 
+    
+    // Append the row
+    bossSheet.appendRow(dataToAppend);
+    Logger.log(`Successfully pushed ${type} to Boss Log.`);
+  } catch (error) {
+    Logger.log(`ERROR pushing to Boss Log: ${error.toString()}`);
+  }
+}
+
+// --- MAIN FUNCTION: Case Note Routing and Boss Log Push ---
+/**
+ * Routes the submitted case note to the client's dedicated Google Sheet, 
+ * and pushes a copy to the Master Boss Log.
+ */
+function onFormSubmitRouteNote(e) {
+  // --- CONFIGURATION ---
+  
+  // ROSTER SHEET CONFIGURATION (Source for Client Links)
+  const ROSTER_DOC_ID = '1JTVVHHdu95S5-ZsQpETNkVU4TiHXYUjj2bTOv4TsLms'; 
+  const ROSTER_SHEET_NAME = 'Sheet1'; 
+  const CLIENT_ID_COLUMN_INDEX = 3;  // Column C in Roster Sheet
+  const CLIENT_SHEET_URL_INDEX = 4;  // Column D in Roster Sheet
+  
+  // FORMS RESPONSE SHEET CONFIGURATION (Indices of data being extracted)
+  const FORM_CLIENT_ID_INDEX = 2;       // Column B (Select Client)
+  const FORM_STAFF_INDEX = 3;           // Column C (Staff Entering Note)
+  const FORM_DATE_INDEX = 4;            // Column D (Date)
+  const FORM_NOTE_CONTENT_INDEX = 5;    // Column E (Note Content)
+  
+  // **NEW CONFIGURATION:** The name of the client sheet where the note will go.
+  const CLIENT_NOTE_SHEET_NAME = 'Case Notes';
+  
+  // --- END CONFIGURATION ---
+
+  // 1. Extract Data from the submission row
+  const newRow = e.range.getValues()[0];
+  const submittedClientKey = newRow[FORM_CLIENT_ID_INDEX - 1]; 
+  const submittedStaff = newRow[FORM_STAFF_INDEX - 1];
+  const submittedDate = newRow[FORM_DATE_INDEX - 1];
+  const submittedNote = newRow[FORM_NOTE_CONTENT_INDEX - 1];
+  
+  
+  // 2. Access the Roster Sheet via its Document ID
+  let rosterSheet;
+  try {
+    const rosterSS = SpreadsheetApp.openById(ROSTER_DOC_ID);
+    rosterSheet = rosterSS.getSheetByName(ROSTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('FATAL ERROR: Could not open Roster Document. Check ROSTER_DOC_ID: ' + error.toString());
+    return;
+  }
+  
+  if (!rosterSheet) {
+    Logger.log('Error: Roster sheet not found (Sheet tab name error). Check the ROSTER_SHEET_NAME.');
+    return;
+  }
+
+  // 3. Look up Client's destination URL
+  const rosterData = rosterSheet.getDataRange().getValues();
+  let clientSheetUrl = null;
+
+  for (let i = 1; i < rosterData.length; i++) {
+    const rosterClientKey = rosterData[i][CLIENT_ID_COLUMN_INDEX - 1];
+    if (rosterClientKey === submittedClientKey) {
+      clientSheetUrl = rosterData[i][CLIENT_SHEET_URL_INDEX - 1];
+      break; 
+    }
+  }
+
+  // 4. Route note to the individual client sheet
+  if (clientSheetUrl) {
+    try {
+      const targetSS = SpreadsheetApp.openByUrl(clientSheetUrl);
+      
+      // *** CHANGE 1: Use getSheetByName('Case Notes') instead of getSheets()[0] ***
+      const targetSheet = targetSS.getSheetByName(CLIENT_NOTE_SHEET_NAME); 
+      
+      if (!targetSheet) {
+        Logger.log(`CLIENT SHEET ERROR: The sheet tab "${CLIENT_NOTE_SHEET_NAME}" was not found in the client's file.`);
+        return; 
+      }
+      
+      // Data to be appended to client sheet (3 fields: Date, Staff, Note)
+      // This array corresponds to Columns A, B, and C in the client sheet.
+      const clientNoteToAppend = [
+        submittedDate,       // Column A
+        submittedStaff,      // Column B
+        submittedNote        // Column C
+      ];
+      
+      // *** CHANGE 2: Use insertRowBefore(2) and setValues() to insert the note at Row 2 ***
+      const targetRow = 2; // Insert the new row immediately after the header row (Row 1)
+      const targetRange = targetSheet.getRange(targetRow, 1, 1, clientNoteToAppend.length); // Range A2:C2
+      
+      targetSheet.insertRowBefore(targetRow);
+      targetRange.setValues([clientNoteToAppend]);
+      
+      Logger.log('Successfully routed note to Client Sheet at Row 2 for: ' + submittedClientKey);
+      
+    } catch (error) {
+      Logger.log('ROUTING ERROR to Client Sheet. Check URL access/validity in Roster D or if the "Case Notes" sheet exists: ' + error.toString());
+    }
+    
+    // --- Push to Boss Log ---
+    const bossLogData = [
+      submittedDate, 
+      submittedStaff,
+      submittedNote,
+      submittedClientKey // Include client key for easier HMIS lookup
+    ];
+    
+    // Use "Case Note" as the type for the boss log
+    pushToBossLog(bossLogData, "Case Note"); 
+  } else {
+    Logger.log('No matching client sheet URL found in Roster for: ' + submittedClientKey);
+  }
+}

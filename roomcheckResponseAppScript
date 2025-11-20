@@ -1,0 +1,139 @@
+// --- HELPER FUNCTION: Pushes standardized note data to the Master Log Sheet ---
+// You must have this same function and BOSS_LOG_ID defined in this script file!
+const BOSS_LOG_ID = '1CS8GzyADMfO0dxgWvcPBO6pLPwS-noIHMGI2LshohUc'; 
+
+function pushToBossLog(dataToAppend, type) {
+  try {
+    const bossSS = SpreadsheetApp.openById(BOSS_LOG_ID);
+    const bossSheet = bossSS.getSheets()[0]; 
+    
+    dataToAppend.unshift(type); 
+    
+    bossSheet.appendRow(dataToAppend);
+    Logger.log(`Successfully pushed ${type} to Boss Log.`);
+  } catch (error) {
+    Logger.log(`ERROR pushing to Boss Log: ${error.toString()}`);
+  }
+}
+
+// --- MAIN FUNCTION: Room Check Routing and Boss Log Push ---
+/**
+ * Routes Room Check data to the client's individual case note file,
+ * and pushes a copy to the Master Boss Log.
+ */
+function onFormSubmitRoomCheckRoute(e) {
+  // --- CONFIGURATION ---
+  
+  // ROSTER SHEET CONFIGURATION (Source for Client Links - Unchanged)
+  const ROSTER_DOC_ID = '1JTVVHHdu95S5-ZsQpETNkVU4TiHXYUjj2bTOv4TsLms'; 
+  const ROSTER_SHEET_NAME = 'Sheet1'; 
+  const CLIENT_ID_COLUMN_INDEX = 3;  // Column C in Roster Sheet
+  const CLIENT_SHEET_URL_INDEX = 4;  // Column D in Roster Sheet
+  
+  // ROOM CHECK RESPONSE SHEET CONFIGURATION (Indices based on image_b25960.png)
+  const FORM_CLIENT_ID_INDEX = 2;       // Column B (Select Client)
+  const FORM_STAFF_INDEX = 7;           // Column G (Staff Members Con-)
+  const FORM_DATE_INDEX = 8;            // Column H (Date of Room Chec-)
+  
+  // Define indices for the check items
+  const CHECK_MEETS_INDEX = 3;          // Column C (Meets Expectations?)
+  const CHECK_RECHECK_INDEX = 4;        // Column D (Is this a recheck?)
+  const CHECK_DOWNSIZING_INDEX = 5;     // Column E (Downsizing Necessary?)
+  const FORM_NOTES_INDEX = 6;           // Column F (Notes/Comments)
+  
+  const CLIENT_NOTE_SHEET_NAME = 'Room Checks'; // Target sheet for room checks
+  
+  // --- END CONFIGURATION ---
+
+  // 1. Extract Data from the submission row
+  const newRow = e.range.getValues()[0];
+  
+  const submittedClientKey = newRow[FORM_CLIENT_ID_INDEX - 1]; 
+  const submittedStaff = newRow[FORM_STAFF_INDEX - 1]; 
+  const submittedDate = newRow[FORM_DATE_INDEX - 1]; 
+  
+  // Pull check item values (These are now used directly for the client sheet)
+  const meetsExpectations = newRow[CHECK_MEETS_INDEX - 1];
+  const isRecheck = newRow[CHECK_RECHECK_INDEX - 1];
+  const downsizing = newRow[CHECK_DOWNSIZING_INDEX - 1];
+  const notesComment = newRow[FORM_NOTES_INDEX - 1]; // This will be the comment in Column F
+  
+  // 2. Synthesize and Format Content (Only for Boss Log)
+  
+  // This format is only used for the Boss Log (master file)
+  const submittedNoteForBossLog = `ROOM CHECK: Expectations: ${meetsExpectations} | Recheck: ${isRecheck} | Downsizing necessary?: ${downsizing}. COMMENT: ${notesComment}`;
+  
+  // 3. Look up Client's destination URL (Unchanged)
+  let rosterSheet;
+  try {
+    const rosterSS = SpreadsheetApp.openById(ROSTER_DOC_ID);
+    rosterSheet = rosterSS.getSheetByName(ROSTER_SHEET_NAME);
+  } catch (error) {
+    Logger.log('FATAL ERROR: Could not open Roster Document. Check ROSTER_DOC_ID: ' + error.toString());
+    return;
+  }
+  
+  if (!rosterSheet) {
+    Logger.log('Error: Roster sheet not found. Check the ROSTER_SHEET_NAME.');
+    return;
+  }
+
+  const rosterData = rosterSheet.getDataRange().getValues();
+  let clientSheetUrl = null;
+  for (let i = 1; i < rosterData.length; i++) {
+    const rosterClientKey = rosterData[i][CLIENT_ID_COLUMN_INDEX - 1];
+    if (rosterClientKey === submittedClientKey) {
+      clientSheetUrl = rosterData[i][CLIENT_SHEET_URL_INDEX - 1];
+      break; 
+    }
+  }
+
+  // 4. Route note to the individual client sheet AND push to Boss Log
+  if (clientSheetUrl) {
+    try {
+      const targetSS = SpreadsheetApp.openByUrl(clientSheetUrl);
+      
+      const targetSheet = targetSS.getSheetByName(CLIENT_NOTE_SHEET_NAME); 
+      
+      if (!targetSheet) {
+        Logger.log(`CLIENT SHEET ERROR: The sheet tab "${CLIENT_NOTE_SHEET_NAME}" was not found in the client's file.`);
+        return; 
+      }
+      
+      // Data to be written to client sheet (6 fields for Columns A-F)
+      // A: Date | B: Staff | C: Expectations | D: Recheck | E: Downsizing | F: Comment
+      const clientNoteToAppend = [
+        submittedDate,         // Column A
+        submittedStaff,        // Column B
+        meetsExpectations,     // Column C
+        isRecheck,             // Column D
+        downsizing,            // Column E
+        notesComment           // Column F
+      ];
+      
+      // Insert row at Row 2 and set values
+      const targetRow = 2; // Insert the new row immediately after the header row (Row 1)
+      const targetRange = targetSheet.getRange(targetRow, 1, 1, clientNoteToAppend.length); 
+      
+      targetSheet.insertRowBefore(targetRow);
+      targetRange.setValues([clientNoteToAppend]);
+      
+      Logger.log('Successfully routed Room Check data (parsed) to Client Sheet at Row 2 for: ' + submittedClientKey);
+      
+    } catch (error) {
+      Logger.log('ROUTING ERROR to Client Sheet. Check URL access/validity in Roster D or if the "Room Checks" sheet exists: ' + error.toString());
+    }
+    
+    // --- Push to Boss Log (Uses the original synthesized note) ---
+    const bossLogData = [
+      submittedDate, 
+      submittedStaff,
+      submittedNoteForBossLog, // This is the single, long string for the master log
+      submittedClientKey 
+    ];
+    
+    pushToBossLog(bossLogData, "Room Check"); 
+  } else {
+    Logger.log('No matching client sheet URL found in Roster for: ' + submittedClientKey);
+  }
+}
